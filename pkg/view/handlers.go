@@ -1,21 +1,41 @@
 package view
 
 import (
-	"fmt"
-	"net/http"
-	"text/template"
+	drive "awesomeProject3/pkg/models"
+	"context"
+	"errors"
 )
 
-func Handler(_template string, file string, w http.ResponseWriter, r *http.Request) {
-	result := _template
-	t, err := template.ParseFiles("templates/" + file + ".html")
-	if err != nil {
-		fmt.Fprintf(w, "error processing")
-		return
+func ValidateUserData(name string, username string, password string) bool {
+	db, _ := drive.ConnectDB()
+	st := drive.New(db)
+	ctx := context.Background()
+	u, _ := st.ListUsers(ctx)
+	if len(u) == 0 {
+		return true
 	}
+	for _, usr := range u {
+		if username == usr.UserName {
+			return false
+		}
+	}
+	if len(password) == 0 || len(name) == 0 {
+		return false
+	}
+	return true
 
-	tpl := template.Must(t, err)
-	tpl.Execute(w, result)
 }
 
+func FindUserByUsername(username string) (int64, error) {
+	db, _ := drive.ConnectDB()
+	st := drive.New(db)
+	ctx := context.Background()
+	u, _ := st.ListUsers(ctx)
+	for _, usr := range u {
+		if username == usr.UserName {
+			return int64(usr.UserID), nil
+		}
+	}
+	return 0, errors.New("error")
 
+}

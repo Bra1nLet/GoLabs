@@ -2,12 +2,35 @@
 // versions:
 //   sqlc v1.17.2
 
-package drive
+package models
 
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"log"
+	"os"
+	"strconv"
 )
+
+func ConnectDB() (*sql.DB, error){
+	dbURI := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable",
+		GetAsString("DB_USER", "postgres"),
+		GetAsString("DB_PASSWORD", "mysecretpassword"),
+		GetAsString("DB_HOST", "localhost"),
+		GetAsInt("DB_PORT", 5432),
+		GetAsString("DB_NAME", "postgres"),
+	)
+
+	log.Default()
+	// Open the database
+	db, err := sql.Open("postgres", dbURI)
+	if err != nil {
+		panic(err)
+	}
+	return db, err
+}
+
 
 type DBTX interface {
 	ExecContext(context.Context, string, ...interface{}) (sql.Result, error)
@@ -20,12 +43,33 @@ func New(db DBTX) *Queries {
 	return &Queries{db: db}
 }
 
-type Queries struct {
-	db DBTX
-}
+
 
 func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 	return &Queries{
 		db: tx,
 	}
 }
+
+
+// GetAsString reads an environment or returns a default value
+func GetAsString(key string, defaultValue string) string {
+	if value, exists := os.LookupEnv(key); exists {
+		return value
+	}
+	return defaultValue
+}
+
+// GetAsInt reads an environment variable into integer or returns a default value
+func GetAsInt(name string, defaultValue int) int {
+	valueStr := GetAsString(name, "")
+	if value, err := strconv.Atoi(valueStr); err == nil {
+		return value
+	}
+	return defaultValue
+}
+type Queries struct {
+	db DBTX
+}
+
+

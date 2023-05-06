@@ -1,6 +1,6 @@
 -- name: ListUsers :many
 -- get all users ordered by the username
-SELECT * FROM webapp.users
+SELECT * FROM gowebapp.users
 ORDER BY user_name;
 
 -- name: GetUser :one

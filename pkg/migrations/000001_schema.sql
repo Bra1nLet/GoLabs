@@ -1,8 +1,8 @@
-CREATE SCHEMA IF NOT EXISTS webapp;
+CREATE SCHEMA IF NOT EXISTS gowebapp;
 
--- ************************************** gowebapp.users
+-- ************************************** webapp.users
 
-CREATE TABLE webapp.users
+CREATE TABLE gowebapp.users
 (
     User_ID        bigserial NOT NULL,
     User_Name      text NOT NULL,

@@ -3,6 +3,7 @@ package view
 import (
 	"awesomeProject3/pkg/models"
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/golang-jwt/jwt/v5"
 	_ "github.com/lib/pq"
@@ -35,6 +36,20 @@ func Registration(w http.ResponseWriter, r *http.Request) {
 
 	w.Write([]byte(UserName))
 
+}
+
+type test struct {
+	Test string `json:"test"`
+}
+
+func AuthTest(w http.ResponseWriter, r *http.Request) {
+	n := test{
+		Test: "test",
+	}
+	f, _ := json.Marshal(n)
+	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(f)
 }
 
 func GetUsers(w http.ResponseWriter, r *http.Request) {
@@ -75,30 +90,28 @@ func validateToken(tokenString string) (*jwt.Token, error) {
 // Middleware function to authorize user
 func Authorize(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		tokenString := r.Header.Get("Authorization")
+		tokenString := GetRawAuthToken(r)
 		if tokenString == "" {
-			if r.URL.Path == "/new-token" {
+			if r.URL.Path == "/auth/new-token" {
 				GenerateNewToken(w, r)
 				return
-			} else if r.URL.Path == "/new-account" {
+			} else if r.URL.Path == "/auth/new-account" {
 				Registration(w, r)
 				return
+			} else if r.URL.Path == "/auth/test" {
+				AuthTest(w, r)
+				return
 			}
+
 			http.Error(w, "Unauthorized 1", http.StatusUnauthorized)
 			return
 		}
+		userID, err := FindUserIDByBearer(tokenString)
+		if err != nil {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
 
-		// Validate token
-		token, err := validateToken(strings.TrimPrefix(tokenString, "Bearer "))
-		if err != nil || !token.Valid {
-			http.Error(w, "Unauthorized 2", http.StatusUnauthorized)
-			return
-		}
-		userID, ok := token.Claims.(jwt.MapClaims)["userID"].(string)
-		if !ok {
-			http.Error(w, "Unauthorized 3", http.StatusUnauthorized)
-			return
-		}
 		intUserID, _ := strconv.ParseInt(userID, 10, 64)
 		// Check user permissions
 		if !hasPermission(intUserID, r.URL.Path) {
@@ -109,6 +122,22 @@ func Authorize(next http.Handler) http.Handler {
 		// Call next handler
 		next.ServeHTTP(w, r)
 	})
+}
+
+func GetRawAuthToken(r *http.Request) string {
+	return r.Header.Get("Authorization")
+}
+
+func FindUserIDByBearer(tokenString string) (string, error) {
+	token, err := validateToken(strings.TrimPrefix(tokenString, "Bearer "))
+	if err != nil || !token.Valid {
+		return "", err
+	}
+	userID, ok := token.Claims.(jwt.MapClaims)["userID"].(string)
+	if !ok {
+		return "", err
+	}
+	return userID, nil
 }
 
 func hasPermission(userID int64, url string) bool {
@@ -142,5 +171,14 @@ func GenerateNewToken(w http.ResponseWriter, r *http.Request) {
 	}
 
 	fmt.Println(username, password, userID)
-	w.Write([]byte(token))
+	data := tokenS{
+		Token: token,
+	}
+	result, _ := json.Marshal(data)
+	w.Header().Set("application/json", http.MethodPost)
+	fmt.Fprintln(w, string(result))
+}
+
+type tokenS struct {
+	Token string `json:"token"`
 }

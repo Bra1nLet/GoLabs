@@ -1,7 +1,10 @@
 FROM fauria/vsftpd
 
+# Install the required packages
+RUN apt-get update && apt-get install -y shadow
+
 # Add a user and set a password
-RUN echo "ftpuser:ftppassword" | chpasswd
+RUN useradd -m ftpuser && echo "ftpuser:ftppassword" | chpasswd
 
 # Expose the FTP port
 EXPOSE 21

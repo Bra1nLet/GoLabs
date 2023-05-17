@@ -4,10 +4,6 @@ import (
 	drive "awesomeProject3/pkg/models"
 	"context"
 	"errors"
-	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
-	"net/http"
-	"os"
 )
 
 func ValidateUserData(name string, username string, password string) bool {
@@ -23,11 +19,10 @@ func ValidateUserData(name string, username string, password string) bool {
 			return false
 		}
 	}
-	if len(password) == 0 || len(name) == 0 {
+	if len(password) <= 6 || len(name) == 0 || len(username) < 4 {
 		return false
 	}
 	return true
-
 }
 
 func contains(s []string, str string) bool {
@@ -37,28 +32,6 @@ func contains(s []string, str string) bool {
 		}
 	}
 	return false
-}
-
-func DockerGO() {
-	e := echo.New()
-
-	e.Use(middleware.Logger())
-	e.Use(middleware.Recover())
-
-	e.GET("/", func(c echo.Context) error {
-		return c.HTML(http.StatusOK, "Hello, Docker! <3")
-	})
-
-	e.GET("/health", func(c echo.Context) error {
-		return c.JSON(http.StatusOK, struct{ Status string }{Status: "OK"})
-	})
-
-	httpPort := os.Getenv("PORT")
-	if httpPort == "" {
-		httpPort = "8080"
-	}
-
-	e.Logger.Fatal(e.Start(":" + httpPort))
 }
 
 // Simple implementation of an integer minimum
@@ -81,5 +54,47 @@ func FindUserByUsername(username string) (int64, error) {
 		}
 	}
 	return 0, errors.New("error")
+}
+
+func CheckUserPass(userID int64, password string) bool {
+	db, _ := drive.ConnectDB()
+	st := drive.New(db)
+	ctx := context.Background()
+	u, _ := st.ListUsers(ctx)
+	for _, usr := range u {
+		if userID == usr.UserID {
+			if usr.PassWordHash == password {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func FindUserByUserID(userID int64) (string, error) {
+	db, _ := drive.ConnectDB()
+	st := drive.New(db)
+	ctx := context.Background()
+	u, _ := st.ListUsers(ctx)
+	for _, usr := range u {
+		if userID == usr.UserID {
+			return usr.UserName, nil
+		}
+	}
+	return "", errors.New("error")
+
+}
+
+func GetNameByUserID(userID int64) (string, error) {
+	db, _ := drive.ConnectDB()
+	st := drive.New(db)
+	ctx := context.Background()
+	u, _ := st.ListUsers(ctx)
+	for _, usr := range u {
+		if userID == usr.UserID {
+			return usr.Name, nil
+		}
+	}
+	return "", errors.New("error")
 
 }

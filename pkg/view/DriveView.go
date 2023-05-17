@@ -44,11 +44,10 @@ func PrintFile(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func AddFileToFolder(w http.ResponseWriter, r *http.Request) {
+func AddFileToFolder(file io.Reader, filename string, w http.ResponseWriter, r *http.Request) {
 	c := AuthFTP(addressFTP, userNameFTP, passwordFTP)
 	userID, _ := FindUserIDByBearer(GetRawAuthToken(r))
 	path := r.PostFormValue("path")
-	fileName := r.PostFormValue("fileName")
 
 	err := c.ChangeDir("data/" + userID + "/" + path)
 	if err != nil {
@@ -56,15 +55,14 @@ func AddFileToFolder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	file, _ := os.OpenFile("Files/"+fileName, os.O_RDONLY, 0)
-	err = c.StorFrom(fileName, file, 0)
+	err = c.StorFrom(filename, file, 0)
 	if err != nil {
 		fmt.Println("File error")
 		return
 	}
 	dirPath, _ := c.CurrentDir()
-	files, _ := c.NameList("")
-	data := UserFolder{Data: files, Path: dirPath}
+	folders, fileList := GetFilesFolders(c)
+	data := UserFolder{Folders: folders, Files: fileList, Path: dirPath}
 	jdata, _ := json.Marshal(data)
 	w.Write(jdata)
 	if err := c.Quit(); err != nil {
@@ -75,15 +73,18 @@ func AddFileToFolder(w http.ResponseWriter, r *http.Request) {
 func CreateFolder(w http.ResponseWriter, r *http.Request) {
 	c := AuthFTP(addressFTP, userNameFTP, passwordFTP)
 	name := r.PostFormValue("folderName")
+	path := r.PostFormValue("path")
 	userID, _ := FindUserIDByBearer(GetRawAuthToken(r))
-	c.ChangeDir("data/" + userID)
+	c.ChangeDir("data/" + userID + "/" + path)
 	c.MakeDir(name)
-	w.Write([]byte("Folder " + name + " created"))
+	GetUserFolder(w, r)
+
 }
 
 type UserFolder struct {
-	Data []string `json:"data"`
-	Path string   `json:"path"`
+	Files   []string `json:"files"`
+	Folders []string `json:"folders"`
+	Path    string   `json:"path"`
 }
 
 func GetUserFolder(w http.ResponseWriter, r *http.Request) {
@@ -95,9 +96,84 @@ func GetUserFolder(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "Folder is not exist !")
 		return
 	}
-	files, _ := c.NameList("")
 	dirPath, _ := c.CurrentDir()
-	data := UserFolder{Data: files, Path: dirPath}
+
+	folders, fileList := GetFilesFolders(c)
+
+	data := UserFolder{Folders: folders, Files: fileList, Path: dirPath}
+	jdata, _ := json.Marshal(data)
+	w.Write(jdata)
+}
+
+func GetFilesFolders(c *ftp.ServerConn) ([]string, []string) {
+	entries, err := c.List("")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	folders := make([]string, 0)
+	for _, entry := range entries {
+		if entry.Type == ftp.EntryTypeFolder {
+			folders = append(folders, entry.Name)
+		}
+	}
+
+	fileslist := make([]string, 0)
+	for _, entry := range entries {
+		if entry.Type == ftp.EntryTypeFile {
+			fileslist = append(fileslist, entry.Name)
+		}
+	}
+	return folders, fileslist
+}
+
+func DeleteUserFile(w http.ResponseWriter, r *http.Request) {
+	c := AuthFTP(addressFTP, userNameFTP, passwordFTP)
+	userID := GetValidUserID(r, c)
+	path := r.PostFormValue("path")
+	filename := r.PostFormValue("filename")
+	err := c.ChangeDir("data/" + userID + "/" + path)
+	if err != nil {
+		fmt.Fprintf(w, "Folder is not exist !")
+		return
+	}
+	err = c.Delete(filename)
+	if err != nil {
+		err := c.RemoveDirRecur(filename)
+		if err != nil {
+			fmt.Fprintf(w, "File not found")
+			return
+		}
+		fmt.Fprintf(w, "Folder deleted")
+		return
+	}
+
+	dirPath, _ := c.CurrentDir()
+	folders, fileList := GetFilesFolders(c)
+	data := UserFolder{Files: fileList, Folders: folders, Path: dirPath}
+	jdata, _ := json.Marshal(data)
+	w.Write(jdata)
+}
+
+func RenameUserFile(w http.ResponseWriter, r *http.Request) {
+	c := AuthFTP(addressFTP, userNameFTP, passwordFTP)
+	userID := GetValidUserID(r, c)
+	path := r.PostFormValue("path")
+	filename := r.PostFormValue("filename")
+	newname := r.PostFormValue("newname")
+	err := c.ChangeDir("data/" + userID + "/" + path)
+	if err != nil {
+		fmt.Fprintf(w, "Folder is not exist !")
+		return
+	}
+	err = c.Rename(filename, newname)
+	if err != nil {
+		fmt.Fprintf(w, "File is not found")
+		return
+	}
+	dirPath, _ := c.CurrentDir()
+	folders, fileList := GetFilesFolders(c)
+	data := UserFolder{Files: fileList, Folders: folders, Path: dirPath}
 	jdata, _ := json.Marshal(data)
 	w.Write(jdata)
 }
@@ -132,9 +208,69 @@ func CreateUserFolder(userID string) {
 
 	err = c.Login("yourName", "yourPass")
 	if err != nil {
-		fmt.Println("test")
+		fmt.Println("tests")
 		log.Fatal(err)
 	}
 	c.ChangeDir("data")
 	c.MakeDir(userID)
+	c.ChangeDir(userID)
+	c.MakeDir("init")
+}
+
+func DownloadFileHandler(w http.ResponseWriter, r *http.Request) {
+	c := AuthFTP(addressFTP, userNameFTP, passwordFTP)
+	filePath := r.PostFormValue("path")
+	fileName := r.PostFormValue("filename")
+	userID := GetValidUserID(r, c)
+
+	c.ChangeDir("data/" + userID + "/" + filePath)
+	n, _ := c.NameList("")
+	log.Println(n)
+	file, err := c.Retr(fileName)
+	if err != nil {
+		log.Println("Failed to retrieve file from FTP server:", err)
+		http.Error(w, "Failed to retrieve file from FTP server", http.StatusInternalServerError)
+		return
+	}
+
+	fileBytes, err := io.ReadAll(file)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to read file: %s", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", fileName))
+	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(fileBytes)))
+
+	if _, err := w.Write(fileBytes); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to write response: %s", err), http.StatusInternalServerError)
+		return
+	}
+}
+
+func TestDownload(w http.ResponseWriter, r *http.Request) {
+	filePath := "not_sleep.mp3"
+
+	file, err := os.Open(filePath)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to open file: %s", err), http.StatusInternalServerError)
+		return
+	}
+	defer file.Close()
+
+	fileBytes, err := io.ReadAll(file)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to read file: %s", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filePath))
+	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(fileBytes)))
+
+	if _, err := w.Write(fileBytes); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to write response: %s", err), http.StatusInternalServerError)
+		return
+	}
 }

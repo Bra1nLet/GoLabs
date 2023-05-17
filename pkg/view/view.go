@@ -7,49 +7,67 @@ import (
 	"fmt"
 	"github.com/golang-jwt/jwt/v5"
 	_ "github.com/lib/pq"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 )
 
+type tokenS struct {
+	Token string `json:"token"`
+}
+type test struct {
+	Test string `json:"tests"`
+}
+
+type tokenValidator struct {
+	Valid string `json:"isValid"`
+}
+
 func Registration(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-Type", "application/json")
 	db, _ := models.ConnectDB()
 	st := models.New(db)
-
-	UserName := r.PostFormValue("username")
-	PassWordHash := r.PostFormValue("password")
-	Name := r.PostFormValue("name")
-
-	if !ValidateUserData(Name, UserName, PassWordHash) {
+	var requestData models.SimpleUserData
+	err := json.NewDecoder(r.Body).Decode(&requestData)
+	if err != nil {
+		log.Println(err)
 		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte("Wrong Data"))
+		return
+	}
+
+	username := requestData.UserName
+	password := requestData.Password
+	name := requestData.Name
+
+	data := tokenS{
+		Token: "failed",
+	}
+	if !ValidateUserData(name, username, password) {
+		w.WriteHeader(http.StatusBadRequest)
+		result, _ := json.Marshal(data)
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(result)
 		return
 	}
 
 	_, _ = st.CreateUsers(context.Background(), models.CreateUsersParams{
-		UserName:     UserName,
-		PassWordHash: PassWordHash,
-		Name:         Name,
+		UserName:     username,
+		PassWordHash: password,
+		Name:         name,
 	})
 
-	w.Write([]byte(UserName))
-
-}
-
-type test struct {
-	Test string `json:"test"`
-}
-
-func AuthTest(w http.ResponseWriter, r *http.Request) {
-	n := test{
-		Test: "test",
+	UserID, _ := FindUserByUsername(username)
+	token, _ := generateToken(strconv.FormatInt(UserID, 10))
+	data = tokenS{
+		Token: token,
 	}
-	f, _ := json.Marshal(n)
-	w.WriteHeader(http.StatusOK)
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(f)
+
+	result, _ := json.Marshal(data)
+	w.Write(result)
+
 }
 
 func GetUsers(w http.ResponseWriter, r *http.Request) {
@@ -73,6 +91,23 @@ func generateToken(userID string) (string, error) {
 	return token.SignedString([]byte("secret-key"))
 }
 
+func ValidateTokenC(w http.ResponseWriter, r *http.Request) {
+	token, err := validateToken(strings.TrimPrefix(GetRawAuthToken(r), "Bearer "))
+	isValid := "false"
+	if err != nil || token == nil {
+		isValid = "false"
+	} else {
+		isValid = "true"
+	}
+
+	data := tokenValidator{
+		Valid: isValid,
+	}
+	//fmt.Println(GetRawAuthToken(r))
+	res, _ := json.Marshal(data)
+	w.Write(res)
+}
+
 // Validate the JWT token
 func validateToken(tokenString string) (*jwt.Token, error) {
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
@@ -91,24 +126,43 @@ func validateToken(tokenString string) (*jwt.Token, error) {
 func Authorize(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tokenString := GetRawAuthToken(r)
+		fmt.Println(r.URL.Path)
+
+		if r.URL.Path == "/auth/validate-token" {
+			ValidateTokenC(w, r)
+			return
+		}
+		if r.URL.Path == "/drive/tests" {
+			TestDownload(w, r)
+			return
+		}
+		if r.URL.Path == "/auth/new-token" {
+			GenerateNewToken(w, r)
+			return
+		}
 		if tokenString == "" {
-			if r.URL.Path == "/auth/new-token" {
-				GenerateNewToken(w, r)
-				return
-			} else if r.URL.Path == "/auth/new-account" {
+			if r.URL.Path == "/auth/new-account" {
 				Registration(w, r)
 				return
-			} else if r.URL.Path == "/auth/test" {
+			} else if r.URL.Path == "/auth/tests" {
 				AuthTest(w, r)
 				return
 			}
 
-			http.Error(w, "Unauthorized 1", http.StatusUnauthorized)
+			data := tokenS{
+				Token: "failed",
+			}
+			res, _ := json.Marshal(data)
+			w.Write(res)
 			return
 		}
 		userID, err := FindUserIDByBearer(tokenString)
 		if err != nil {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			data := tokenS{
+				Token: "failed",
+			}
+			res, _ := json.Marshal(data)
+			w.Write(res)
 			return
 		}
 
@@ -126,6 +180,28 @@ func Authorize(next http.Handler) http.Handler {
 
 func GetRawAuthToken(r *http.Request) string {
 	return r.Header.Get("Authorization")
+}
+
+func GetUserData(w http.ResponseWriter, r *http.Request) {
+	userID, _ := FindUserIDByBearerAsInt(GetRawAuthToken(r))
+	userName, _ := FindUserByUserID(userID)
+	Name, _ := GetNameByUserID(userID)
+
+	userData := models.SimpleUserData{
+		UserID:   userID,
+		UserName: userName,
+		Name:     Name,
+	}
+
+	n, _ := json.Marshal(userData)
+	w.WriteHeader(http.StatusOK)
+	w.Write(n)
+}
+
+func FindUserIDByBearerAsInt(tokenString string) (int64, error) {
+	token, _ := FindUserIDByBearer(tokenString)
+	result, _ := strconv.Atoi(token)
+	return int64(result), nil
 }
 
 func FindUserIDByBearer(tokenString string) (string, error) {
@@ -151,16 +227,45 @@ func HandleProtectedData(w http.ResponseWriter, r *http.Request) {
 }
 
 func GenerateNewToken(w http.ResponseWriter, r *http.Request) {
+
 	db, err := models.ConnectDB()
 	st := models.New(db)
 	st.ListUsers(context.Background())
 
-	username := r.PostFormValue("username")
-	password := r.PostFormValue("password")
+	var requestData models.SimpleUserData
+	err = json.NewDecoder(r.Body).Decode(&requestData)
+	if err != nil {
+		log.Println(err)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	username := requestData.UserName
+	password := requestData.Password
+
+	fmt.Println(username + " " + password)
 
 	userID, err := FindUserByUsername(username)
 	if err != nil {
-		w.Write([]byte("Wrong data"))
+		w.WriteHeader(http.StatusOK)
+		data := tokenS{
+			Token: "failed",
+		}
+		result, _ := json.Marshal(data)
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(result)
+		return
+	}
+
+	fmt.Println(userID)
+
+	if !CheckUserPass(userID, password) {
+		w.WriteHeader(http.StatusBadRequest)
+		data := tokenS{
+			Token: "failed",
+		}
+		result, _ := json.Marshal(data)
+		w.Write(result)
 		return
 	}
 
@@ -170,15 +275,23 @@ func GenerateNewToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fmt.Println(username, password, userID)
+	//fmt.Println(username, password, userID)
 	data := tokenS{
 		Token: token,
 	}
 	result, _ := json.Marshal(data)
-	w.Header().Set("application/json", http.MethodPost)
-	fmt.Fprintln(w, string(result))
+	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-Type", "application/json")
+	fmt.Println(string(result))
+	w.Write(result)
 }
 
-type tokenS struct {
-	Token string `json:"token"`
+func AuthTest(w http.ResponseWriter, r *http.Request) {
+	n := test{
+		Test: "tests",
+	}
+	f, _ := json.Marshal(n)
+	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(f)
 }

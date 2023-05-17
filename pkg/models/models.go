@@ -37,6 +37,13 @@ type GowebappUser struct {
 	IsEnabled    bool            `db:"is_enabled" json:"isEnabled"`
 }
 
+type SimpleUserData struct {
+	UserID       int64           `db:"user_id" json:"userID"`
+	UserName 	 string 		 `db:"user_name" json:"username"`
+	Password string          `db:"password" json:"password"`
+	Name         string          `db:"name" json:"name"`
+}
+
 type GowebappWorkout struct {
 	WorkoutID  int64     `db:"workout_id" json:"workoutID"`
 	SetID      int64     `db:"set_id" json:"setID"`

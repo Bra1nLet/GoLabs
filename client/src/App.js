@@ -1,26 +1,27 @@
-import React, { useEffect, useState } from 'react';
+import logo from './logo.svg';
 import './App.css';
-import { getList } from './list/list';
+import {Drive, CreateDrive, Download, Registration, DeleteDrive, Rename, Login} from "./containers";
+import {GetUser, ValidateToken} from "./hooks/Auth";
 
-function Start(){
-    var res = fetch('/auth/test')
-    return "test"
-}
-
-function Star() {
-    const requestOptions = {
-        method: "POST",
-        mode: "no-cors",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify(this)
+function App() {
+    if (!ValidateToken()){
+        return (
+            <div className="App">
+                <Login/>
+                <Registration/>
+            </div>
+        );
     }
-    var response = fetch("/auth/test", requestOptions).then((data) => {
-        return data.text()
-    });
-    //var result = response.json();
-    return ("test");
-
-
+    return (
+        <div>
+        <h1>Authorized</h1>
+        <Drive/>
+        <CreateDrive/>
+        <DeleteDrive/>
+        <Rename/>
+        <Download/>
+        </div>
+    );
 }
 
-export default Star;
+export default App;

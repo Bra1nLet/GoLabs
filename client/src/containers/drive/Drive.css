@@ -1,0 +1,29 @@
+ul {
+     list-style-type: none;
+     padding-left: 20px;
+ }
+
+li {
+    line-height: 1.5;
+    margin-left: -15px;
+}
+
+.folder:before {
+    content: '\f07b';
+    font-family: "Font Awesome 5 Free";
+    font-weight: 900;
+    margin-right: 10px;
+    color: #FFA500;
+}
+
+.file:before {
+    content: '\f15b';
+    font-family: "Font Awesome 5 Free";
+    font-weight: 900;
+    margin-right: 10px;
+    color: #808080;
+}
+
+h1 {
+    font-family: Arial, sans-serif;
+}

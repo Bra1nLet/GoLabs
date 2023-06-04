@@ -14,6 +14,12 @@ type GowebappExercise struct {
 	ExerciseName string `db:"exercise_name" json:"exerciseName"`
 }
 
+type UserFolder struct {
+	Files   []string `json:"files"`
+	Folders []string `json:"folders"`
+	Path    string   `json:"path"`
+}
+
 type GowebappImage struct {
 	ImageID     int64  `db:"image_id" json:"imageID"`
 	UserID      int64  `db:"user_id" json:"userID"`
@@ -50,4 +56,13 @@ type GowebappWorkout struct {
 	UserID     int64     `db:"user_id" json:"userID"`
 	ExerciseID int64     `db:"exercise_id" json:"exerciseID"`
 	StartDate  time.Time `db:"start_date" json:"startDate"`
+}
+
+
+type TokenS struct {
+	Token string `json:"token"`
+}
+
+type TokenValidator struct {
+	Valid string `json:"isValid"`
 }

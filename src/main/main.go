@@ -1,7 +1,8 @@
 package main
 
 import (
-	"awesomeProject3/pkg/routes"
+	"awesomeProject3/models"
+	"awesomeProject3/routes"
 	"fmt"
 	_ "github.com/lib/pq"
 	"net/http"
@@ -10,9 +11,10 @@ import (
 
 func main() {
 	fmt.Println("Server started")
+	models.Migrate()
 	n := &http.Server{
 		Handler:      routes.Route(),
-		Addr:         "127.0.0.1:8080",
+		Addr:         "0.0.0.0:8080",
 		WriteTimeout: 15 * time.Second,
 		ReadTimeout:  15 * time.Second,
 	}
@@ -21,5 +23,3 @@ func main() {
 		return
 	}
 }
-
-

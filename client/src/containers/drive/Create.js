@@ -1,11 +1,12 @@
 import React from 'react';
 import { useRef, useState } from 'react';
-import {Authorize}  from "../../hooks/";
+import {Authorize}  from "../../hooks";
 import {ExitFromAccount, GetToken} from "../../hooks/Auth";
 import './Drive.css'
 
 const CreateDrive = () => {
     const path = useRef("");
+    const pathFolder = useRef("");
     const nameFile = useRef("");
 
     const [selectedFile, setSelectedFile] = useState(null);
@@ -16,7 +17,7 @@ const CreateDrive = () => {
 
     const handleButtonCreate = () => {
         const formData = new FormData();
-        formData.append('path', path.current.value);
+        formData.append('path', pathFolder.current.value);
         formData.append('folderName', nameFile.current.value);
         const authOptions = {
             method: "POST",
@@ -52,7 +53,7 @@ const CreateDrive = () => {
             <h1>Create Directory</h1>
             <label htmlFor="path">Path</label>
             <br />
-            <input ref={path} name="path" type="text" />
+            <input ref={pathFolder} name="path" type="text" />
             <br />
             <label htmlFor="name">Name</label>
             <br />

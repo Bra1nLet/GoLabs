@@ -1,6 +1,6 @@
 import React from 'react';
 import { useRef, useState } from 'react';
-import {Authorize}  from "../../hooks/";
+import {Authorize}  from "../../hooks";
 import {ExitFromAccount, GetToken} from "../../hooks/Auth";
 import './Drive.css'
 

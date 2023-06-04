@@ -1,7 +1,7 @@
 package unit_tests
 
 import (
-	"awesomeProject3/pkg/models"
+	"awesomeProject3/models"
 	"testing"
 )
 

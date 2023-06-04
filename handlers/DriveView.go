@@ -1,20 +1,20 @@
-package view
+package handlers
 
 import (
+	"awesomeProject3/models"
 	"encoding/json"
 	"fmt"
 	"github.com/jlaffaye/ftp"
 	"io"
 	"log"
 	"net/http"
-	"os"
 	"time"
 )
 
 var (
 	passwordFTP = "yourPass"
 	userNameFTP = "yourName"
-	addressFTP  = "localhost:21"
+	addressFTP  = "ftp-server:21"
 )
 
 func PrintFile(w http.ResponseWriter, r *http.Request) {
@@ -22,6 +22,9 @@ func PrintFile(w http.ResponseWriter, r *http.Request) {
 	userID, _ := FindUserIDByBearer(GetRawAuthToken(r))
 	path := r.PostFormValue("path")
 	fileName := r.PostFormValue("fileName")
+	fmt.Println(c.List(""))
+	fmt.Println(c.CurrentDir())
+	c.ChangeDir("")
 
 	err := c.ChangeDir("data/" + userID + "/" + path)
 	if err != nil {
@@ -41,7 +44,7 @@ func PrintFile(w http.ResponseWriter, r *http.Request) {
 		log.Fatal(err)
 	}
 	w.Write(test)
-
+	c.Quit()
 }
 
 func AddFileToFolder(file io.Reader, filename string, w http.ResponseWriter, r *http.Request) {
@@ -62,12 +65,13 @@ func AddFileToFolder(file io.Reader, filename string, w http.ResponseWriter, r *
 	}
 	dirPath, _ := c.CurrentDir()
 	folders, fileList := GetFilesFolders(c)
-	data := UserFolder{Folders: folders, Files: fileList, Path: dirPath}
+	data := models.UserFolder{Folders: folders, Files: fileList, Path: dirPath}
 	jdata, _ := json.Marshal(data)
 	w.Write(jdata)
 	if err := c.Quit(); err != nil {
 		log.Fatal(err)
 	}
+	c.Quit()
 }
 
 func CreateFolder(w http.ResponseWriter, r *http.Request) {
@@ -75,16 +79,13 @@ func CreateFolder(w http.ResponseWriter, r *http.Request) {
 	name := r.PostFormValue("folderName")
 	path := r.PostFormValue("path")
 	userID, _ := FindUserIDByBearer(GetRawAuthToken(r))
+	fmt.Println(c.CurrentDir())
 	c.ChangeDir("data/" + userID + "/" + path)
+	fmt.Println(c.CurrentDir())
 	c.MakeDir(name)
+	fmt.Println(c.CurrentDir())
 	GetUserFolder(w, r)
-
-}
-
-type UserFolder struct {
-	Files   []string `json:"files"`
-	Folders []string `json:"folders"`
-	Path    string   `json:"path"`
+	c.Quit()
 }
 
 func GetUserFolder(w http.ResponseWriter, r *http.Request) {
@@ -100,9 +101,10 @@ func GetUserFolder(w http.ResponseWriter, r *http.Request) {
 
 	folders, fileList := GetFilesFolders(c)
 
-	data := UserFolder{Folders: folders, Files: fileList, Path: dirPath}
+	data := models.UserFolder{Folders: folders, Files: fileList, Path: dirPath}
 	jdata, _ := json.Marshal(data)
 	w.Write(jdata)
+	c.Quit()
 }
 
 func GetFilesFolders(c *ftp.ServerConn) ([]string, []string) {
@@ -140,6 +142,7 @@ func DeleteUserFile(w http.ResponseWriter, r *http.Request) {
 	err = c.Delete(filename)
 	if err != nil {
 		err := c.RemoveDirRecur(filename)
+		c.Quit()
 		if err != nil {
 			fmt.Fprintf(w, "File not found")
 			return
@@ -150,9 +153,10 @@ func DeleteUserFile(w http.ResponseWriter, r *http.Request) {
 
 	dirPath, _ := c.CurrentDir()
 	folders, fileList := GetFilesFolders(c)
-	data := UserFolder{Files: fileList, Folders: folders, Path: dirPath}
+	data := models.UserFolder{Files: fileList, Folders: folders, Path: dirPath}
 	jdata, _ := json.Marshal(data)
 	w.Write(jdata)
+	c.Quit()
 }
 
 func RenameUserFile(w http.ResponseWriter, r *http.Request) {
@@ -173,9 +177,10 @@ func RenameUserFile(w http.ResponseWriter, r *http.Request) {
 	}
 	dirPath, _ := c.CurrentDir()
 	folders, fileList := GetFilesFolders(c)
-	data := UserFolder{Files: fileList, Folders: folders, Path: dirPath}
+	data := models.UserFolder{Files: fileList, Folders: folders, Path: dirPath}
 	jdata, _ := json.Marshal(data)
 	w.Write(jdata)
+	c.Quit()
 }
 
 func AuthFTP(addr string, user string, pass string) *ftp.ServerConn {
@@ -201,20 +206,24 @@ func GetValidUserID(r *http.Request, c *ftp.ServerConn) string {
 }
 
 func CreateUserFolder(userID string) {
-	c, err := ftp.Dial("localhost:21", ftp.DialWithTimeout(5*time.Second))
+	c, err := ftp.Dial(addressFTP, ftp.DialWithTimeout(5*time.Second))
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	err = c.Login("yourName", "yourPass")
+	err = c.Login(userNameFTP, passwordFTP)
 	if err != nil {
-		fmt.Println("tests")
 		log.Fatal(err)
 	}
-	c.ChangeDir("data")
+	err = c.ChangeDir("data")
+	if err != nil {
+		c.MakeDir("data")
+		c.ChangeDir("data")
+	}
 	c.MakeDir(userID)
 	c.ChangeDir(userID)
 	c.MakeDir("init")
+	c.Quit()
 }
 
 func DownloadFileHandler(w http.ResponseWriter, r *http.Request) {
@@ -242,35 +251,10 @@ func DownloadFileHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", fileName))
 	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(fileBytes)))
-
+	c.Quit()
 	if _, err := w.Write(fileBytes); err != nil {
 		http.Error(w, fmt.Sprintf("Failed to write response: %s", err), http.StatusInternalServerError)
-		return
-	}
-}
 
-func TestDownload(w http.ResponseWriter, r *http.Request) {
-	filePath := "not_sleep.mp3"
-
-	file, err := os.Open(filePath)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to open file: %s", err), http.StatusInternalServerError)
-		return
-	}
-	defer file.Close()
-
-	fileBytes, err := io.ReadAll(file)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to read file: %s", err), http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/octet-stream")
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filePath))
-	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(fileBytes)))
-
-	if _, err := w.Write(fileBytes); err != nil {
-		http.Error(w, fmt.Sprintf("Failed to write response: %s", err), http.StatusInternalServerError)
 		return
 	}
 }

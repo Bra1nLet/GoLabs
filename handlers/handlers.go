@@ -1,7 +1,7 @@
-package view
+package handlers
 
 import (
-	drive "awesomeProject3/pkg/models"
+	drive "awesomeProject3/models"
 	"context"
 	"errors"
 )
@@ -32,15 +32,6 @@ func contains(s []string, str string) bool {
 		}
 	}
 	return false
-}
-
-// Simple implementation of an integer minimum
-// Adapted from: https://gobyexample.com/testing-and-benchmarking
-func IntMin(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
 
 func FindUserByUsername(username string) (int64, error) {

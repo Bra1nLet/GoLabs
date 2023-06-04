@@ -4,24 +4,24 @@ import {Drive, CreateDrive, Download, Registration, DeleteDrive, Rename, Login} 
 import {GetUser, ValidateToken} from "./hooks/Auth";
 
 function App() {
-    if (!ValidateToken()){
-        return (
-            <div className="App">
-                <Login/>
-                <Registration/>
-            </div>
-        );
-    }
+  if (!ValidateToken()){
     return (
-        <div>
+        <div className="App">
+          <Login/>
+          <Registration/>
+        </div>
+    );
+  }
+  return (
+      <div>
         <h1>Authorized</h1>
         <Drive/>
         <CreateDrive/>
         <DeleteDrive/>
         <Rename/>
         <Download/>
-        </div>
-    );
+      </div>
+  );
 }
 
 export default App;

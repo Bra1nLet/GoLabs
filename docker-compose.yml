@@ -1,0 +1,70 @@
+version: "2"
+
+volumes:
+  postgres:
+
+services:
+  server:
+    depends_on:
+      - postgres
+    build:
+      context: .
+    ports:
+      - "8080:8080"
+    networks:
+      - network
+
+  migration:
+    build:
+      context: migrations/
+    depends_on:
+      - postgres
+      - server
+      - frontend
+      - ftp-server
+
+    networks:
+      - network
+    restart: "no"
+
+  postgres:
+    image: postgres:13
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    environment:
+      POSTGRES_PASSWORD: postgres
+    networks:
+      - network
+
+
+  frontend:
+    image: frontend-js
+    build:
+      context: client/
+    ports:
+      - "3000:3000"
+    depends_on:
+      - server
+    networks:
+      - network
+
+  ftp-server:
+    container_name: ftp-server
+    image: garethflowers/ftp-server
+    environment:
+      - FTP_USER=yourName
+      - FTP_PASS=yourPass
+    restart: always
+    ports:
+      - '4000-4001:20-21/tcp'
+      - '40000-40009:40000-40009/tcp'   
+    volumes:
+      - ./shared:/data
+    networks:
+      - network
+
+networks:
+  network:
